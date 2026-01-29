@@ -2,14 +2,10 @@
 from typing import List, Dict, Any
 
 from nlp_parser import parse_user_message
-from iata_service import postprocess_entities
+from iata_service import build_final_json
 
 
 def asistent(nombre_empresa: str = "Nombre_empresa") -> List[Dict[str, Any]]:
-    """
-    Inicia el asistente y devuelve una lista con el JSON final por cada mensaje (log),
-    para que puedas mostrarlo como tabla/JSON si el tutor lo pide.
-    """
     print(f"Hola, bienvenido a {nombre_empresa}. ¿Como te puedo ayudar?")
 
     logs: List[Dict[str, Any]] = []
@@ -21,20 +17,24 @@ def asistent(nombre_empresa: str = "Nombre_empresa") -> List[Dict[str, Any]]:
             return logs
 
         parsed = parse_user_message(user_msg)
-        final_json = postprocess_entities(parsed)
+        final_json = build_final_json(parsed)
 
-        origen = final_json.get("origen")
-        destino = final_json.get("destino")
-        fecha = final_json.get("fecha")
-        aerolinea = final_json.get("aerolínea")
+        origen = final_json.get("Ciudad Origen")
+        destino = final_json.get("Ciudad Destino")
+        fecha = final_json.get("Fecha")
+        iata_from = final_json.get("IATA From")
+        iata_to = final_json.get("IATA To")
+        pax = final_json.get("Pax")
 
-        print(f"Perfecto, Comienzo la búsqueda de tu viaje a {destino} desde {origen} para el {fecha} con {aerolinea}.")
+        print(
+            f"Perfecto: {origen} ({iata_from}) -> {destino} ({iata_to}), "
+            f"Fecha: {fecha}, Pax: {pax}."
+        )
 
-        print("\nJSON:")
+        print("\nJSON final:")
         print(final_json)
 
         logs.append(final_json)
-
         print("\nEscribe otra solicitud o 'salir' para terminar.")
 
 
