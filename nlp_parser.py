@@ -22,11 +22,24 @@ def _title_case(text: str) -> str:
 
 def _extract_date_and_remove(msg: str) -> Tuple[Optional[str], str]:
     """
-    Extrae: '15 de octubre' o '15 de octubre de 2026'
-    y lo elimina del texto para no confundir el 'de' con la ruta.
+    Extrae fechas y las elimina del texto para no confundir el 'de' con la ruta.
+
+    Soporta:
+      - '15 de octubre' o '15 de octubre de 2026'
+      - '15-08-2021' (opcional agregado)
     """
-    pattern = rf"\b(\d{{1,2}})\s+de\s+({_MONTHS})(?:\s+de\s+(\d{{4}}))?\b"
-    m = re.search(pattern, msg, re.IGNORECASE)
+    # 1) OPCIONAL: dd-mm-yyyy
+    pattern_numeric = r"\b(\d{1,2})-(\d{1,2})-(\d{4})\b"
+    m0 = re.search(pattern_numeric, msg)
+    if m0:
+        day, month, year = m0.group(1), m0.group(2), m0.group(3)
+        fecha = f"{day}-{month}-{year}"
+        msg_removed = msg[:m0.start()] + " " + msg[m0.end():]
+        return fecha, _clean_text(msg_removed)
+
+    # 2) Formato español: '15 de octubre' o '15 de octubre de 2026'
+    pattern_es = rf"\b(\d{{1,2}})\s+de\s+({_MONTHS})(?:\s+de\s+(\d{{4}}))?\b"
+    m = re.search(pattern_es, msg, re.IGNORECASE)
     if not m:
         return None, msg
 
@@ -37,9 +50,6 @@ def _extract_date_and_remove(msg: str) -> Tuple[Optional[str], str]:
 
 
 def _extract_airline(msg: str) -> Optional[str]:
-    """
-    'con Iberia' -> 'Iberia'
-    """
     m = re.search(r"\bcon\s+([a-z0-9áéíóúñ][a-z0-9áéíóúñ\s\.-]{1,40})", msg, re.IGNORECASE)
     if not m:
         return None
@@ -51,19 +61,19 @@ def _extract_airline(msg: str) -> Optional[str]:
 
 def _extract_quantity(msg: str) -> Optional[str]:
     """
-    Cantidad SOLO si está vinculada a billetes/pasajes/tickets/personas.
-    Evita agarrar el '15' de la fecha.
+    Cantidad SOLO si está vinculada a billetes/pasajes/tickets/personas/boletos.
     """
-    m = re.search(r"\b(\d{1,2})\b\s*(?:billetes?|pasajes?|tickets?|personas?)\b", msg, re.IGNORECASE)
+    keywords = r"(?:billetes?|pasajes?|tickets?|personas?|boletos?)"
+
+    m = re.search(rf"\b(\d{{1,2}})\b\s*{keywords}\b", msg, re.IGNORECASE)
     if m:
         return str(int(m.group(1)))
 
-    m2 = re.search(r"\b(" + "|".join(_NUM_MAP.keys()) + r")\b\s*(?:billetes?|pasajes?|tickets?|personas?)\b", msg, re.IGNORECASE)
+    m2 = re.search(r"\b(" + "|".join(_NUM_MAP.keys()) + rf")\b\s*{keywords}\b", msg, re.IGNORECASE)
     if m2:
         return str(_NUM_MAP[m2.group(1).lower()])
 
-    return None  # si no se menciona, lo maneja el post-proceso
-
+    return None
 
 def _extract_route(msg: str) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -86,7 +96,7 @@ def parse_user_message(message: str) -> Dict[str, Optional[str]]:
     {
       'origen': 'Quito',
       'destino': 'Madrid',
-      'fecha': '15 de octubre' o None,
+      'fecha': '15 de octubre' o '15-08-2021' o None,
       'cantidad': '3' o None,
       'aerolínea': 'Iberia' o None
     }
