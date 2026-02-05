@@ -1,7 +1,8 @@
 # date_utils.py
-from __future__ import annotations
 from typing import Optional
 import re
+from datetime import date
+import unicodedata
 
 _MONTH_TO_NUM = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
@@ -9,40 +10,41 @@ _MONTH_TO_NUM = {
     "octubre": 10, "noviembre": 11, "diciembre": 12
 }
 
-def normalize_date_es(date_text: Optional[str], default_year: int) -> Optional[str]:
-    """
-    Convierte:
-      - '15 de octubre' -> '15-10-<default_year>'
-      - '15 de octubre de 2026' -> '15-10-2026'
-    Retorna None si no reconoce formato.
-    """
+def _strip_accents(text: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+def normalize_date_es(date_text: Optional[str]) -> Optional[str]:
+    """Devuelve fecha en formato dd-mm-yyyy, soporta: dd-mm-yyyy, '15 de octubre', 'septiembre'."""
     if not date_text:
         return None
 
-    s = date_text.strip().lower()
+    s = _strip_accents(date_text.strip().lower())
+    today = date.today()
 
-    # formato dd-mm-yyyy ya listo
     m0 = re.fullmatch(r"(\d{1,2})-(\d{1,2})-(\d{4})", s)
     if m0:
-        d, mo, y = int(m0.group(1)), int(m0.group(2)), int(m0.group(3))
-        if 1 <= d <= 31 and 1 <= mo <= 12:
-            return f"{d:02d}-{mo:02d}-{y:04d}"
-        return None
+        d, m, y = map(int, m0.groups())
+        return f"{d:02d}-{m:02d}-{y:04d}"
 
-    # formato "15 de octubre" o "15 de octubre de 2026"
-    m = re.fullmatch(r"(\d{1,2})\s+de\s+([a-záéíóúñ]+)(?:\s+de\s+(\d{4}))?", s)
+    if re.fullmatch(r"[a-z]+", s):
+        month = _MONTH_TO_NUM.get(s)
+        if not month:
+            return None
+        year = today.year + (1 if month < today.month else 0)
+        return f"01-{month:02d}-{year}"
+
+    m = re.fullmatch(r"(\d{1,2})\s+de\s+([a-z]+)(?:\s+de\s+(\d{4}))?", s)
     if not m:
         return None
 
     day = int(m.group(1))
     month_name = m.group(2)
-    year = int(m.group(3)) if m.group(3) else int(default_year)
+    year_txt = m.group(3)
 
     month = _MONTH_TO_NUM.get(month_name)
     if not month:
         return None
 
-    if not (1 <= day <= 31):
-        return None
-
-    return f"{day:02d}-{month:02d}-{year:04d}"
+    year = int(year_txt) if year_txt else (today.year + (1 if (month, day) < (today.month, today.day) else 0))
+    return f"{day:02d}-{month:02d}-{year}"
